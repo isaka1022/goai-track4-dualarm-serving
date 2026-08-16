@@ -1,0 +1,24 @@
+connecting to ws://127.0.0.1:9999 ...
+[CONNECTING] websocket policy server ws://127.0.0.1:9999 (attempt 1/180, timeout=30s)
+[CONNECTED] websocket policy server connected: ws://127.0.0.1:9999
+
+--- reset ---
+reset() -> None
+
+--- update_obs ---
+update_obs() -> None
+
+--- get_action ---
+get_action() returned type=<class 'list'>
+  list length (chunk size) = 50
+  first element type=<class 'dict'>
+  first element keys=['left_arm_joint_state', 'left_ee_joint_state', 'right_arm_joint_state', 'right_ee_joint_state']
+    left_arm_joint_state: shape=(6,) dtype=float64 values=[ 2.66798317e-03  1.24906364e-02 -3.24782520e-05  6.04508969e-03  3.14692506e-03  1.86166349e-03]
+    left_ee_joint_state: shape=(1,) dtype=float64 values=[0.10471286]
+    right_arm_joint_state: shape=(6,) dtype=float64 values=[ 0.04030627 -0.01442752  0.00156533 -0.01945231  0.01173085  0.01687635]
+    right_ee_joint_state: shape=(1,) dtype=float64 values=[0.13039922]
+  concatenated per-step dim = 14
+  all values finite = True
+
+=== RESULT ===
+PASS: got a valid 14-dim action chunk (chunk_size=50)
