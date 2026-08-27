@@ -50,6 +50,23 @@ else
   bash "$(dirname "$0")/cold_bootstrap.sh"
 fi
 
+echo "=== [0.5] disk preflight ==="
+# Isaac Sim + Isaac Lab + CuRobo + assets are tens of GB and they land on the
+# container disk, which cannot be resized after the pod is created. Finding
+# that out an hour into install.sh is the expensive way to learn it, so measure
+# first and say the number out loud.
+ROOT_FREE_GB=$(df -BG --output=avail / 2>/dev/null | tail -1 | tr -dc '0-9')
+VOL_FREE_GB=$(df -BG --output=avail "${WORKSPACE}" 2>/dev/null | tail -1 | tr -dc '0-9')
+echo "[0.5] container disk (/) free : ${ROOT_FREE_GB:-?} GB"
+echo "[0.5] network volume free      : ${VOL_FREE_GB:-?} GB"
+if [ -n "${ROOT_FREE_GB}" ] && [ "${ROOT_FREE_GB}" -lt 80 ]; then
+  echo "[0.5] WARNING: under 80 GB free on the container disk."
+  echo "[0.5] install.sh may run out partway through. It resumes with --from,"
+  echo "[0.5] but a too-small disk cannot be fixed without recreating the pod."
+  echo "[0.5] Continuing in 15s — Ctrl-C now if you would rather resize first."
+  sleep 15
+fi
+
 echo "=== [1/6] Vulkan userspace (Isaac renders through Vulkan, not EGL) ==="
 # Unlike the PARC/LIBERO work, which used MUJOCO_GL=egl, Isaac Sim needs the
 # Vulkan loader and ICD present even in headless mode.
