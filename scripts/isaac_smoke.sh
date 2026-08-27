@@ -103,24 +103,44 @@ else
   echo "[5] skip (already done)"
 fi
 
-echo "=== [6/6] run one task headless and keep the video ==="
-# UNVERIFIED: the exact evaluation entry point for a Pi_0 policy has not been
-# confirmed. Two shapes are plausible and the docs are ambiguous about which
-# one drives an already-running server:
+echo "=== [6/6] run one task and keep the video ==="
+# Resolved by reading the upstream sources rather than guessing:
+#   scripts/robodojo.sh          -> "eval: ... (server + client on localhost)"
+#   scripts/internal/run_policy_eval.sh
+#        -> launches BOTH setup_eval_policy_server.sh and setup_eval_env_client.sh
+# So `eval` starts the policy server itself. Do NOT also run run_serve.sh:
+# that would leave two servers fighting over the GPU.
 #
-#   (a) robodojo.sh spawns the policy itself
-#       bash scripts/robodojo.sh smoke --policy-dir XPolicyLab/policy/Pi_0 \
-#         --ckpt <CKPT> --policy-env uv --env-cfg arx_x5 --action-type joint \
-#         --only stack_bowls --headless --fail-fast
-#
-#   (b) our server runs separately (scripts/run_serve.sh) and the evaluator
-#       connects to 127.0.0.1:9999
-#
-# Check `bash scripts/robodojo.sh --help` on the pod first, then fill this in.
-# Do not guess: a wrong invocation burns GPU minutes and produces no video.
-echo "[6] STOP — read the comment block above and confirm the eval command."
-echo "[6] Expected output once it runs:"
-echo "[6]   eval_result/RoboDojo/<task>/<policy>/<env_cfg>/<seed>/<run_id>/"
+# --action-type defaults to `ee`; ours is joint, so it must be passed.
+# --ckpt is the checkpoint *label* (`sim`), matching scripts/run_serve.sh.
+TASK="${TASK:-stack_bowls}"
+EVAL_ARGS=(
+  --policy-dir XPolicyLab/policy/Pi_0
+  --task "${TASK}"
+  --ckpt sim
+  --policy-env uv
+  --env-cfg arx_x5
+  --action-type joint
+  --seed 0
+)
+
+cd "${ROBODOJO}"
+echo "[6] dry-run first (prints the command, costs no GPU time):"
+bash scripts/robodojo.sh eval "${EVAL_ARGS[@]}" --dry-run
+
+# Headless: robodojo.sh has no --headless flag (checked — the docs mention one
+# but the script does not implement it). The sim client is selected through
+# EVAL_ENV_TYPE (sim | debug | real_world) in XPolicyLab/utils/setup_env_client.sh,
+# and the actual Isaac launch lives in utils/run_sim_env_client.sh, which is
+# only present once XPolicyLab is installed. Before the real run, check:
+#   grep -i 'headless\|video\|render' ../XPolicyLab/utils/run_sim_env_client.sh
+# and export whatever it honours. On a pod there is no display anyway, so this
+# is about making Isaac render offscreen rather than refusing to start.
+echo "[6] Now inspect the launcher, then re-run without --dry-run:"
+echo "[6]   grep -i 'headless|video|render' ${WORKSPACE}/XPolicyLab/utils/run_sim_env_client.sh"
+echo "[6]   bash scripts/robodojo.sh eval ${EVAL_ARGS[*]}"
+echo "[6] Output lands in:"
+echo "[6]   eval_result/RoboDojo/<task>/<policy>/<env_cfg>/<seed>_<info>/<run_id>/"
 echo "[6]     episode_*.mp4   <- the footage we came for"
 echo "[6]     _result.json    <- success counts, score, eval_time"
 
