@@ -11,11 +11,12 @@
 # Cost note: this pulls ~12 GB of checkpoint. Run it on the volume you intend
 # to keep, not on ephemeral container disk, or you will pay for it twice.
 #
-# Derived from the bring-up sequence recorded in docs/RUNBOOK.ja.md. The
-# checkpoint fetch below is the verified part (it is how the 29 GB upstream
-# tree was reduced to 12 GB). The surrounding steps are reconstructed from the
-# runbook's summary of the original /workspace/rebuild.sh, which lived on the
-# pod and was lost with it — expect to adjust a path on first run.
+# This mirrors the original /workspace/rebuild.sh, recovered off the pod before
+# it was torn down (docs/original-rebuild.sh keeps a verbatim copy). An earlier
+# version of this file was reconstructed from docs/RUNBOOK.ja.md alone and had
+# the checkpoint layout wrong: the metadata is a single _CHECKPOINT_METADATA
+# file, not a metadata/ directory, and the sparse patterns are repo-relative
+# with no leading slash. Both would have failed at runtime.
 set -euo pipefail
 
 WORKSPACE="${WORKSPACE:-/workspace}"
@@ -29,8 +30,10 @@ apt-get install -y -qq git git-lfs curl > /dev/null
 git lfs install
 
 echo "=== [2/6] XPolicyLab onto the persistent volume ==="
+# Skip LFS smudge: the repo's own LFS objects are not needed to serve.
 [ -d "${WORKSPACE}/XPolicyLab" ] || \
-  git clone https://github.com/XPolicyLab/XPolicyLab.git "${WORKSPACE}/XPolicyLab"
+  GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1 \
+    https://github.com/XPolicyLab/XPolicyLab.git "${WORKSPACE}/XPolicyLab"
 
 echo "=== [3/6] Miniforge (conda is required: the reference env pins old deps) ==="
 if [ ! -x "${WORKSPACE}/miniforge3/bin/conda" ]; then
@@ -56,20 +59,23 @@ bash install.sh
 echo "=== [6/6] π0 checkpoint: params + assets + metadata only ==="
 # --no-cone lets us exclude train_state. We never resume training, so the
 # optimizer state is dead weight: 29 GB upstream -> 12 GB here.
-if [ -d "${CKPT_DEST}" ]; then
+if [ -d "${CKPT_DEST}/60000/params" ]; then
   echo "[6] checkpoint already present, skipping"
 else
-  rm -rf /tmp/rdckpt
-  GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1 --sparse \
-    https://huggingface.co/datasets/RoboDojo-Benchmark/RoboDojo /tmp/rdckpt
-  cd /tmp/rdckpt
-  git sparse-checkout set --no-cone \
-    "/ckpt/RoboDojo/Pi_0/${CKPT_NAME}/60000/params/**" \
-    "/ckpt/RoboDojo/Pi_0/${CKPT_NAME}/60000/assets/**" \
-    "/ckpt/RoboDojo/Pi_0/${CKPT_NAME}/60000/metadata/**"
-  git lfs pull --include "ckpt/RoboDojo/Pi_0/${CKPT_NAME}/60000/**"
-  mkdir -p "$(dirname "${CKPT_DEST}")"
-  cp -r "/tmp/rdckpt/ckpt/RoboDojo/Pi_0/${CKPT_NAME}" "${CKPT_DEST}"
+  STAGE="${WORKSPACE}/pi0ckpt"
+  rm -rf "${STAGE}"
+  export GIT_LFS_SKIP_SMUDGE=1
+  git clone --depth 1 --sparse \
+    https://huggingface.co/datasets/RoboDojo-Benchmark/RoboDojo "${STAGE}"
+  cd "${STAGE}"
+  B="ckpt/RoboDojo/Pi_0/${CKPT_NAME}/60000"
+  # Repo-relative, no leading slash. Metadata is one file, not a directory.
+  git sparse-checkout set --no-cone "$B/params" "$B/assets" "$B/_CHECKPOINT_METADATA"
+  unset GIT_LFS_SKIP_SMUDGE
+  git lfs pull --include "$B/params/**,$B/assets/**,$B/_CHECKPOINT_METADATA"
+  mkdir -p "${CKPT_DEST}"
+  mv "${STAGE}/$B" "${CKPT_DEST}/"
+  cd "${WORKSPACE}" && rm -rf "${STAGE}"
 fi
 
 du -sh "${CKPT_DEST}" || true
