@@ -1,0 +1,19 @@
+flowchart LR
+  subgraph ORG["Organizer side"]
+    A["Isaac Sim<br/>runs the simulation"]
+  end
+
+  subgraph MINE["My rented GPU · RunPod RTX 4090"]
+    C["Policy server<br/>ws://host:port"]
+    D["π0 checkpoint<br/>7.6 GB VRAM"]
+  end
+
+  A -->|"observation"| C
+  C -->|"images + state"| D
+  D -->|"50 × 14 joints"| C
+  C -->|"action chunk"| A
+
+  classDef org fill:#E69F00,stroke:#8a6100,color:#000
+  classDef mine fill:#0072B2,stroke:#004a73,color:#fff
+  class A org
+  class C,D mine

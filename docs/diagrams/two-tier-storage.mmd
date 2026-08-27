@@ -1,0 +1,24 @@
+flowchart LR
+  subgraph VOL["Network volume /workspace — persistent, FUSE"]
+    V1["π0 checkpoint<br/>12 GB"]
+    V2["miniforge · repo · env_cfg"]
+  end
+
+  subgraph LOC["Container disk /root — ephemeral, local NVMe"]
+    L1["uv venv<br/>221 packages in 30s"]
+    L2["checkpoint copy"]
+  end
+
+  S["Policy server :9999"]
+
+  V1 -->|"bulk copy"| L2
+  V2 -->|"local_rebuild.sh"| L1
+  L1 --> S
+  L2 --> S
+
+  classDef persist fill:#0072B2,stroke:#004a73,color:#fff
+  classDef ephem fill:#E69F00,stroke:#8a6100,color:#000
+  classDef serve fill:#009E73,stroke:#006146,color:#fff
+  class V1,V2 persist
+  class L1,L2 ephem
+  class S serve
